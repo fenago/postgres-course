@@ -263,8 +263,10 @@ How to do it...
 The command that executes a single SQL command and prints the output is
 the easiest, as shown here:
 
+**Note:** Open new terminal and run following commands.
 
 ```
+$ su - postgres
 $ psql -c "SELECT current_time"
      timetz
 -----------------
@@ -280,40 +282,12 @@ small and simple set of examples:
 
 
 ```
-$ psql -f examples.sql
+echo "SELECT current_database(); SELECT current_user;" >> examples.sql
+
+psql -f examples.sql
 ```
 
-
-It produces the following output when successful, which is a list of
-command tags that show the command that was executed, and how many rows
-were affected:
-
-
-```
-SET
-SET
-SET
-SET
-SET
-SET
-DROP SCHEMA
-CREATE SCHEMA
-SET
-SET
-SET
-CREATE TABLE
-CREATE TABLE
-COPY 5
-COPY 3
-```
-
-
-The `examples.sql` script is very similar to a dump file
-produced by PostgreSQL backup tools, so this type
-of file and the output it produces are very common. When a
-command is executed successfully, PostgreSQL
-outputs a `command` tag equal to the name of that command;
-this is how the preceding output was produced.
+![](./images/3.png)
 
 The `psql` tool can also be used with both
 the `-c` and `-f` modes together; each one can be
@@ -322,7 +296,9 @@ consecutively:
 
 
 ```
-$ psql -c "SELECT current_time" –f examples.sql -c "SELECT current_time"
+$ psql -c "SELECT current_time" -f examples.sql -c "SELECT current_time"
+
+
      timetz
 -----------------
  18:52:15.287+01
