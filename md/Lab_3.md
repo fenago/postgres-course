@@ -10,7 +10,6 @@ In this lab, we will cover the following topics:
 -   Preventing duplicate rows
 -   Finding a unique key for a set of data
 -   Generating test data
--   Randomly sampling data
 -   Loading data from a spreadsheet
 -   Loading data from flat files
 -   Making bulk data changes using server-side procedures with
@@ -41,17 +40,22 @@ such as the following:
 
 
 ```
-CREATE TABLE MyCust
-( id SERIAL PRIMARY KEY
-, descr TEXT);
+CREATE TABLE cust (
+ customerid BIGINT NOT NULL
+,firstname TEXT NOT NULL
+,lastname TEXT NOT NULL
+,age INTEGER NOT NULL);
 
-INSERT INTO MyCust(descr)
-VALUES
-    ('desc1'),
-    ('desc2'),
-    ('desc2'),
-    ('desc4'),
-    ('desc5');
+INSERT INTO cust VALUES (1, 'Philip', 'Marlowe', 33);
+INSERT INTO cust VALUES (2, 'Richard', 'Hannay', 37);
+INSERT INTO cust VALUES (3, 'Harry', 'Palmer', 36);
+INSERT INTO cust VALUES (4, 'Rick', 'Deckard', 4);
+INSERT INTO cust VALUES (4, 'Roy', 'Batty', 41);
+
+
+CREATE TABLE "MyCust"
+AS
+SELECT * FROM cust;
 ```
 
 
@@ -65,6 +69,7 @@ error:
 
 ```
 postgres=# SELECT count(*) FROM mycust;
+
 ERROR:   relation "mycust" does not exist
 LINE 1: SELECT * FROM mycust;
 ```
@@ -75,6 +80,7 @@ So, we write it in the correct case:
 
 ```
 postgres=# SELECT count(*) FROM MyCust;
+
 ERROR:  relation "mycust" does not exist
 LINE 1: SELECT * FROM mycust;
 ```
@@ -95,10 +101,7 @@ The output is as follows:
 
 
 ```
- count
--------
-     5
-(1 row)
+count | 5
 ```
 
 
@@ -161,34 +164,11 @@ PostgreSQL requires that for an object name, as shown here:
 
 ```
 postgres=# SELECT quote_ident('MyCust');
- quote_ident
--------------
- "MyCust"
-(1 row)
+
 postgres=# SELECT quote_ident('mycust');
- quote_ident
--------------
- mycust
-(1 row)
 ```
 
-
-The `quote_ident()` function may be
-especially useful if you are creating a table based on a variable name
-in a PL/pgSQL function, as follows:
-
-
-```
-EXECUTE 'CREATE TEMP TABLE ' || quote_ident(tablename) ||
-                '(col1 INTEGER);'
-```
-
-
-
-
-
-
-
+![](./images/6.png)
 
 
 
@@ -264,8 +244,7 @@ WHERE column_name IN
  HAVING count(*) > 1
 )
 AND table_schema NOT IN ('information_schema', 'pg_catalog')
-ORDER BY column_name
-;
+ORDER BY column_name;
 ```
 
 
@@ -321,8 +300,7 @@ SELECT table_schema
               FROM multiple_definition )
  ORDER BY table_name
         , table_schema
-        , column_name
-;
+        , column_name;
 ```
 
 
@@ -412,22 +390,11 @@ Here is its usage with output:
 
 
 ```
-# select diff_table_definition('s1','x','s2','x');
- diff_table_definition
------------------------
- (col1,smallint,,)
- (col2,text,,)
- (,,col3,numeric)
- (,,col1,integer)
-(4 rows)
+select diff_table_definition('s1','x','s2','x');
 ```
 
 
-
-
-
-
-
+![](./images/7.png)
 
 
 
@@ -450,17 +417,8 @@ duplicate value in `customerid`:
 
 
 ```
-CREATE TABLE cust (
- customerid BIGINT NOT NULL
-,firstname  TEXT NOT NULL
-,lastname   TEXT NOT NULL
-,age       INTEGER NOT NULL);
-INSERT INTO cust VALUES (1, 'Philip', 'Marlowe', 33);
-INSERT INTO cust VALUES (2, 'Richard', 'Hannay', 37);
-INSERT INTO cust VALUES (3, 'Harry', 'Palmer', 36);
-INSERT INTO cust VALUES (4, 'Rick', 'Deckard', 4);
-INSERT INTO cust VALUES (4, 'Roy', 'Batty', 41);
 postgres=# SELECT * FROM cust ORDER BY 1;
+
  customerid | firstname | lastname | age
 ------------+-----------+----------+-----
           1 | Philip    | Marlowe  |  33
@@ -703,37 +661,6 @@ data from a live table.
 
 
 
-There\'s more...
-----------------
-
-Locking the table against changes for long periods may not be possible
-while we remove duplicate rows. That creates some
-fairly hard problems with large tables. In that
-case, we need to do things slightly differently:
-
-1.  Identify the rows to be deleted and save them in a side table.
-2.  Build an index on the main table to speed up access to rows.
-3.  Write a program that reads the rows from the side table in a loop,
-    performing a series of smaller transactions.
-4.  Start a new transaction.
-5.  From the side table, read a set of rows that match.
-6.  Select those rows from the main table for updates, relying on the
-    index to make those accesses happen quickly.
-7.  Delete the appropriate rows.
-8.  Commit, and then loop again.
-
-The aforementioned program can\'t be written as
-a `database` function, as we can\'t have multiple transactions
-in a function. We need multiple transactions to ensure that we hold
-locks on each row for the shortest possible duration.
-
-
-
-
-
-
-
-
 
 Preventing duplicate rows
 =========================
@@ -811,8 +738,7 @@ This creates a new index named `new_cust_customerid_idx`.
 
 All these techniques exclude duplicates, just with slightly different
 syntaxes. All of them create an index, but only the first two create a
-formal *constraint*. Each of these techniques can be used when we have a
-primary key or unique constraint that uses multiple columns.
+formal *constraint*. Each of these techniques can be used when we have a primary key or unique constraint that uses multiple columns.
 
 The last method is important because it allows you
 to specify a `WHERE` clause on the index. This can be useful
@@ -820,42 +746,6 @@ if you know that the column values are unique only
 in certain circumstances. The resulting index is then known as
 a **partial index**.
 
-Suppose our data looked like this:
-
-
-```
-postgres=# SELECT * FROM partial_unique;
-```
-
-
-This gives the following output:
-
-
-```
-customerid | status | close_date
------------+--------+------------
-         1 | OPEN   |
-         2 | OPEN   |
-         3 | OPEN   |
-         3 | CLOSED | 2010-03-22
-(4 rows)
-```
-
-
-Then, we can put a partial index on the table to enforce the uniqueness
-of `customerid` only for `status = 'OPEN'`, like
-this:
-
-
-```
-CREATE UNIQUE INDEX ON partial_unique (customerid)
-   WHERE status = 'OPEN';
-```
-
-
-If your uniqueness constraint needs to be enforced across more complex
-data types, then you may need to use a more advanced syntax. A few
-examples will help here.
 
 Let\'s start with the simplest example: create a table of boxes and put
 sample data in it. This may be the first time you\'re seeing
@@ -899,13 +789,9 @@ This creates a new index named `boxes_position_excl`:
 
 ```
  #\d boxes_position_excl
- Index "public.boxes_position_excl"
-  Column | Type | Key? | Definition
-----------+------+------+------------
- position | box | yes | "position"
-gist, for table "public.boxes"
 ```
 
+![](./images/8.png)
 
 We can use the same syntax even with the basic data types. So, a fourth
 way of performing our first example would be as follows:
@@ -921,12 +807,10 @@ This creates a new index named
 
 
 ```
-# insert into new_cust VALUES (4);
-ERROR: conflicting key value violates exclusion constraint "new_cust_customerid_excl"
-DETAIL: Key (customerid)=(4) conflicts with existing key (customerid)=(4).
+insert into new_cust VALUES (4);
 ```
 
-
+![](./images/9.png)
 
 
 How it works...
@@ -1079,10 +963,9 @@ of the existing ranges, then PostgreSQL will stop us:
 ```
 INSERT INTO iprange2
 VALUES ('[192.168.0.10,192.168.0.20]', 'Somebody else');
-ERROR:  conflicting key value violates exclusion constraint "iprange2_iprange_excl"
-DETAIL:  Key (iprange)=([192.168.0.10,192.168.0.20]) conflicts with existing key (iprange)=([192.168.0.1,192.168.0.16]).
 ```
 
+![](./images/10.png)
 
 ### A real-world example -- a range of time
 
@@ -1122,7 +1005,17 @@ Let\'s start with a small table, where the answer is fairly obvious:
 
 
 ```
-postgres=# select * from ord;
+CREATE TABLE ord (
+orderid INTEGER NOT NULL
+,customerid INTEGER NOT NULL
+,amt INTEGER NOT NULL
+);
+
+INSERT INTO ord VALUES (10677, 2, 6);
+INSERT INTO ord VALUES (5019, 3, 277);
+INSERT INTO ord VALUES (9748, 3, 77);
+
+select * from ord;
 ```
 
 
@@ -1203,9 +1096,8 @@ postgres=# SELECT num_of_values, count(*)
             ORDER BY count(*);
  num_of_values | count
 ---------------+-------
+             4 |     1
              2 |     1
-             1 |     1
-(2 rows)
 ```
 
 
@@ -1232,7 +1124,7 @@ following example:
 ```
  num_of_values | count
 ---------------+-------
-             1 |     3
+             2 |     3
 ```
 
 
@@ -1286,9 +1178,6 @@ values.
 
 
 
-
-
-
 Generating test data
 ====================
 
@@ -1318,6 +1207,8 @@ The steps are as follows:
     
     ```
     postgres=# SELECT * FROM generate_series(1,5);
+
+
      generate_series
     -----------------
                    1
@@ -1334,6 +1225,8 @@ The steps are as follows:
     postgres=# SELECT date(t)                     
     FROM generate_series(now(),
       now() + '1 week', '1 day') AS f(t);
+
+
         date    
     ------------
      2021-08-25
@@ -1347,348 +1240,6 @@ The steps are as follows:
     (8 rows)
     ```
     
-4.  Then, we want to generate a value for each column in
-    the `test` table. We can break that down into a series of
-    functions, using the following examples as a guide:
-    -   Either of these functions can be used to generate both rows and
-        reasonable primary key values for them.
-    -   For a random `integer` value, this is the function:
-        
-        ```
-        (random()*(2*10^9))::integerCopy
-        ```
-        
-    -   For a random `bigint` value, the function is as
-        follows:
-        
-        ```
-        (random()*(9*10^18))::bigintCopy
-        ```
-        
-5.  For random `numeric` data, the
-    function is the following:
-    
-    ```
-    (random()*100.)::numeric(5,2)
-    ```
-    
-
-    -   For a random-length string, up to a maximum length, this is the
-        function:
-        
-        ```
-        repeat('1',(random()*40)::integer)Copy
-        ```
-        
-    -   For a random-length substring, the function is as follows:
-        
-        ```
-        substr('abcdefghijklmnopqrstuvwxyz',1, (random()*25)::integer)Copy
-        ```
-        
-    -   Here is the function for a random string from a list of strings:
-        
-        ```
-        (ARRAY['one','two','three'])[0.5+random()*3]Copy
-        ```
-        
-6.  Finally, we can put both techniques together to generate our table:
-    
-    ```
-    postgres=# SELECT key
-                         ,(random()*100.)::numeric(4,2)
-                       ,repeat('1',(random()*25)::integer)
-     FROM generate_series(1,10) AS f(key);
-     key | numeric |      repeat
-    -----+---------+------------------------
-       1 |   83.05 | 1111
-       2 |    5.28 | 11111111111111
-       3 |   41.85 | 1111111111111111111111
-       4 |   41.70 | 11111111111111111
-       5 |   53.31 | 1
-       6 |   10.09 | 1111111111111111
-       7 |   68.08 | 111
-       8 |   19.42 | 1111111111111111
-       9 |   87.03 | 11111111111111111111
-      10 |   70.64 | 111111111111111
-    (10 rows)
-    ```
-    
-7.  Alternatively, we can use random ordering:
-    
-    ```
-    postgres=# SELECT key
-                             ,(random()*100.)::numeric(4,2)
-                             ,repeat('1',(random()*25)::integer)
-                             FROM generate_series(1,10) AS f(key)
-                             ORDER BY random() * 1.0;
-     key | numeric |         repeat         
-    -----+---------+-------------------------
-       4 |   86.09 | 1111
-      10 |   28.30 | 11111111
-       2 |   64.09 | 111111
-       8 |   91.59 | 111111111111111
-       5 |   64.05 | 11111111
-       3 |   75.22 | 11111111111111111
-       6 |   39.02 | 1111
-       7 |   20.43 | 1111111
-       1 |   42.91 | 11111111111111111111
-       9 |   88.64 | 1111111111111111111111
-    (10 rows)
-    ```
-    
-
-
-
-How it works...
----------------
-
-Set-returning functions literally return a set of
-rows. That allows them to be used in either the `FROM` clause,
-as if they were a table, or the `SELECT` clause.
-The `generate_series()` set of functions returns either dates
-or integers, depending on the data types of the input parameters you
-use.
-
-The `::` operator is used to cast between data types.
-The *random string from a list of strings* example uses PostgreSQL
-arrays. You can create an array using the `ARRAY` constructor
-syntax and then use an integer to reference one element in the array. In
-our case, we used a random subscript.
-
-
-
-There\'s more...
-----------------
-
-There are also some commercial tools used
-to generate
-application-specific test data for PostgreSQL.
-They are available
-at <http://www.sqlmanager.net/products/postgresql/datagenerator> and <http://www.datanamic.com/datagenerator/index.html>.
-
-The key features for any data generator are as
-follows:
-
--   The ability to generate data in the right format for custom data
-    types
--   The ability to add data to multiple tables, while respecting foreign
-    key constraints between tables
--   The ability to add data to non-uniform
-    distributions
-
-The tools and tricks shown here are cool and clever, though there are
-some problems hiding here as well. Real data has so many strange things
-in it that it can be very hard to simulate. One of the most difficult
-things is generating data that follows realistic distributions. For
-example, if we had to generate data for people\'s heights, then we\'d
-want to generate data to follow a normal distribution. If we were
-generating customer bank balances, we\'d want to use a Zipf
-distribution, or for the number of reported insurance claims, perhaps a
-Poisson distribution (or perhaps not). Replicating real quirks in data
-can take some time.
-
-Finally, note that casting a float into an integer rounds it to the
-nearest integer, so the distribution of integers is not uniform on each
-extreme. For instance, the probability
-of `(random()*10)::int` being 0 is just 5%, as is its
-probability of being 10, while each integer between 1 and 9 occurs with
-a probability of 10%. This is why we put 0.5 in the last example, which
-is simpler than using the `floor()` function.
-
-
-
-See also
---------
-
-You can use existing data to generate test databases using sampling.
-That\'s the subject of our next topic, *Randomly sampling data*.
-
-
-
-
-
-
-
-
-
-Randomly sampling data
-======================
-
-
-DBAs may be asked to set up a test server and populate it with test
-data. Often, that server will be old hardware,
-possibly with smaller disk sizes. So, the subject of data sampling
-raises its head.
-
-The purpose of sampling is to reduce the size of the dataset and improve
-the speed of later analysis. Some statisticians are so used to the idea
-of sampling that they may not even question whether its use is valid or
-if it might cause further complications.
-
-The SQL standard way to perform sampling is by adding
-the `TABLESAMPLE` clause to the `SELECT` statement. 
-
-
-
-How to do it...
----------------
-
-In this section, we will take a random sample of a given collection of
-data (for example, a given table). First, you should realize that there
-isn\'t a simple tool to slice off a sample of your database. It would
-be neat if there were, but there isn\'t. You\'ll
-need to read all of this to understand why:
-
-1.  We first consider using SQL to derive a sample. Random sampling is
-    actually very simple because we can use
-    the `TABLESAMPLE` clause. Consider the following example:
-    
-    ```
-    postgres=# SELECT count(*) FROM mybigtable;
-     count
-    -------
-     10000
-    (1 row)
-    postgres=# SELECT count(*) FROM mybigtable 
-                              TABLESAMPLE BERNOULLI(1);
-     count
-    -------
-       106
-    (1 row)
-    postgres=# SELECT count(*) FROM mybigtable 
-                              TABLESAMPLE BERNOULLI(1);
-     count
-    -------
-       99
-    (1 row)
-    ```
-    
-2.  Here, the `TABLESAMPLE` clause applies
-    to `mybigtable` and tells `SELECT` to consider
-    only a random sample, while the `BERNOULLI` keyword
-    denotes the sampling method used, and the number `1`
-    between parentheses represents the percentage of rows that we want
-    to consider in the sample -- that is, 1%. Quite easy!
-3.  Now, we need to get the sampled data out of the database, which is
-    tricky for a few reasons. Firstly, there is no option to specify
-    a `WHERE` clause for `pg_dump`. Secondly, if you
-    create a view that contains
-    the `WHERE` clause, `pg_dump` dumps only the
-    view definition, not the view itself.
-4.  You can use `pg_dump` to dump all databases, apart from a
-    set of tables, so you can produce a sampled
-    dump like this:
-    
-    ```
-    pg_dump –-exclude-table=mybigtable > db.dmp
-    pg_dump –-table=mybigtable –-schema-only > mybigtable.schema
-    psql -c '\copy (SELECT * FROM mybigtable 
-                        TABLESAMPLE BERNOULLI (1)) to mybigtable.dat' 
-    ```
-    
-5.  Then, reload onto a separate database using the following commands:
-    
-    ```
-    psql -f db.dmp 
-    psql -f mybigtable.schema 
-    psql -c '\copy mybigtable from mybigtable.dat'
-    ```
-    
-
-Overall, my advice is to use sampling with caution. In general, it is
-easier to apply it to a few very large tables only, in view of both the
-mathematical issues surrounding the sample design and the difficulty of
-extracting the data.
-
-
-
-How it works\...
-----------------
-
-The extract mechanism shows off the capabilities
-of the `psql` and `pg_dump` PostgreSQL command-line
-tools, as `pg_dump` allows you to include or exclude objects
-and dump the entire table (or only its schema),
-whereas `psql` allows you to dump out the result of an
-arbitrary query into a file.
-
-The `BERNOULLI` clause specifies the sampling method -- that
-is, PostgreSQL takes the random sample by performing a full table scan
-and then selecting each row with the required probability (here, 1%).
-
-Another built-in sampling method is `SYSTEM`, which reads a
-random sample of table pages and then includes all rows in these pages;
-this is generally faster, given that samples are normally quite a bit
-smaller than the original, but the randomness of the selection is
-affected by how rows are physically arranged on disk, which makes it
-suitable for some applications only.
-
-Here is an example that shows what the problem is.
-Suppose you take a dictionary, rip out a few pages, and then select all
-the words in them; you will get a random sample composed of a
-few *clusters* of consecutive words. This is good enough if you want to
-estimate the average length of a word but not for analyzing the average
-number of words for each initial letter. The reason is that the initial
-letter of a word is strongly correlated with how the words are arranged
-in pages, while the length of a word is not.
-
-We haven\'t discussed how random the `TABLESAMPLE` clause
-is. This isn\'t the right place for such details; however, it is
-reasonably simple to extend PostgreSQL with extra functions or sampling
-methods, so if you prefer another mechanism, you can find an external
-random number generator and create a new sampling method for
-the `TABLESAMPLE` clause. PostgreSQL includes two extra
-sampling
-methods, `tsm_system_rows` and `tsm_system_time,`,
-as contrib extensions; they are excellent examples to start from.
-
-The `tsm_system_rows` method does not work with percentages;
-instead, the numeric argument is interpreted as the number of rows to be
-returned. Similarly, the `tsm_system_time` method will regard
-its argument as the number of milliseconds to spend retrieving the
-random sample.
-
-These two methods include the word `system` in their name
-because they use block-level sampling, such as the
-built-in `system` sampling method; hence, their randomness is
-affected by the same *clustering* limitation as described previously.
-
-The sampling method shown earlier is
-a simple random sampling technique that has an **Equal Probability of
-Selection** (**EPS**) design.
-
-EPS samples are considered useful because the variance of the sample
-attributes is similar to the variance of the original dataset. However,
-bear in mind that this is useful only if you are considering variances.
-
-Simple random sampling can make the eventual sample biased toward more
-frequently occurring data. For example, if you have a 1% sample of data
-on which some kinds of data occur only 0.001% of the time, you may end
-up with a dataset that doesn\'t have any of that outlying data.
-
-What you might wish to do is to pre-cluster
-your data and take different samples from each group to ensure that you
-have a sampled dataset that includes many more outlying attributes. A
-simple method might be to do the following:
-
--   Include 1% of all normal data.
--   Include 25% of outlying data.
-
-Note that if you do this, then it is no longer an EPS sample design.
-
-Undoubtedly, there are statisticians who will be fuming after reading
-this. You\'re welcome to use the facilities of the SQL language to
-create a more accurate sample. Just make sure that you know what you\'re
-doing, and check out some good statistical literature, websites, or
-textbooks.
-
-
-
-
-
-
-
 
 
 Loading data from a spreadsheet
@@ -2335,8 +1886,7 @@ END; $$;
 ```
 
 
-For extra practice, follow the execution using the debugger in pgAdmin
-or OmniDB.
+For extra practice, follow the execution using the debugger in pgAdmin.
 
 The `CALL` statement can also be used to
 call functions that return void, but other than that, functions and

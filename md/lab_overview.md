@@ -22,4 +22,3 @@ Labs for this course are listed below:
 5. Database Administration
 6. Performance and Concurrency
 7. Backup and Recovery
-8. Monitoring and Diagnosis

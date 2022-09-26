@@ -10,11 +10,9 @@ In this lab, we\'ll cover the following topics:
 -   What is the server uptime?
 -   Locating the database server files
 -   Locating the database server\'s message log
--   Locating the database\'s system identifier
 -   Listing databases on the database server
 -   How many tables are there in a database?
 -   How much disk space does a database use?
--   How much disk space does a table use?
 -   Which are my biggest tables?
 -   How many rows are there in a table?
 -   Quickly estimating the number of rows in a table
@@ -109,6 +107,8 @@ follows:
 
 ```
 postgres=# SELECT pg_postmaster_start_time(); 
+
+
 pg_postmaster_start_time 
 ----------------------------------------------
 2021-10-01 19:37:41.389134+00
@@ -120,6 +120,8 @@ Then, we can write a SQL query to get the uptime, like this:
 
 ```
 postgres=# SELECT current_timestamp - pg_postmaster_start_time(); 
+
+
 ?column? 
 -----------------
  02:59:18.925917
@@ -131,6 +133,8 @@ Finally, we can apply some formatting:
 
 ```
 postgres=# SELECT date_trunc('second', current_timestamp - pg_postmaster_start_time()) as uptime; 
+
+
      uptime 
 ----------
  03:00:26
@@ -169,9 +173,10 @@ If you can connect using psql, then you can use this command:
 
 ```
 postgres=# SHOW data_directory; 
+
     data_directory
 ----------------------
- /var/lib/pgsql/data/
+ /var/lib/postresql/14/main
 ```
 
 
@@ -341,123 +346,6 @@ much* that goes into the logs by changing other settings such as
 
 
 
-There\'s more\...
------------------
-
-The `log_destination` parameter controls where the log
-messages are stored. The valid values
-are `stderr`, `csvlog`, `syslog`,
-and `eventlog` (the latter is only on Windows).
-
-The logging collector is a background process that writes to a log file
-everything that the PostgreSQL server outputs to `stderr`.
-This is probably the most reliable way to log messages in case of
-problems since it depends on fewer services.
-
-Log rotation can be controlled with settings such as
-`log_rotation_age` and `log_rotation_size` if you
-are using the logging collector. Alternatively, it is possible to
-configure the `logrotate` utility to perform log rotation,
-which is the default on Debian and Ubuntu systems.
-
-
-Locating the database\'s system identifier
-==========================================
-
-
-Each database server has a system
-identifier assigned when the database is initialized (created). The
-server identifier remains the same if the server is backed up, cloned,
-and so on.
-
-Many actions on the server are keyed to the system identifier, and you
-may be asked to provide this information when you report a fault.
-
-In this topic, you will learn how to display the system identifier.
-
-
-
-Getting ready
--------------
-
-You need to connect as the Postgres OS user, or another user with
-execute privileges on the server software.
-
-
-
-How to do it...
----------------
-
-In order to display the system identifier, we just need to launch the
-following command:
-
-
-```
-pg_controldata <data-directory> | grep "system identifier"
-Database system identifier:           7015545877453537036 
-```
-
-
-Note that the preceding syntax will not work on Debian or Ubuntu
-systems, for the same reasons explained in relation
-to `initdb` in the *Locating the database server
-files* topic. However, in this case, there is
-no `postgresql-common` alternative, so if you must
-run `pg_controldata`, you need to specify the full path to the
-executable, as in this example:
-
-
-```
-/usr/lib/postgresql/14/bin/pg_controldata $PGDATA
-```
-
-
-Tip
-
-Don\'t use `-D` in front of the data directory name. This is
-the only PostgreSQL server application where you don\'t need to do that.
-
-
-
-How it works...
----------------
-
-The `pg_controldata` utility is a
-PostgreSQL server application that shows the
-content of a server\'s control file. The control
-file is located within the `data` directory of a server, and
-it is created at database initialization time. Some of the information
-within it is updated regularly, and some is only updated when certain
-major events occur.
-
-The full output of `pg_controldata` looks like the following
-(some values may change over time as the server runs):
-
-
-```
-pg_control version number:            1300
-Catalog version number:               202107181
-Database system identifier:           7015545877453537036
-Database cluster state:               in production
-pg_control last modified:             Tue 05 Oct 2021 12:46:26 BST
-Latest checkpoint location:           0/16F2EC0
-… (not shown in full)
-```
-
-
-Tip
-
-Never edit the PostgreSQL control file. If you do, the server probably
-won\'t start correctly, or you may mask other errors. And if you do
-that, people will be able to tell, so fess up as soon as possible!
-
-
-
-
-
-
-
-
 
 Listing databases on the database server
 ========================================
@@ -483,23 +371,18 @@ concepts.
 How to do it...
 ---------------
 
-If you have access to `psql`, you can
-type the following command:
+If you have access to `psql`, you can type the following commands:
 
 
 ```
-bash $ psql -l
-                               List of databases
-   Name    | Owner  | Encoding |   Collate   |    Ctype    | Access privileges
------------+--------+----------+-------------+-------------+-------------------
- postgres  | sriggs | UTF8     | en_GB.UTF-8 | en_GB.UTF-8 |
- template0 | sriggs | UTF8     | en_GB.UTF-8 | en_GB.UTF-8 | =c/sriggs        +
-           |        |          |             |             | sriggs=CTc/sriggs
- template1 | sriggs | UTF8     | en_GB.UTF-8 | en_GB.UTF-8 | =c/sriggs        +
-           |        |          |             |             | sriggs=CTc/sriggs
-(3 rows)
+psql -l
 ```
 
+**Note:** Make sure to run this command as `postgres` user instead of root 
+`su - postgres`
+
+
+![](./images/4.png)
 
 You can also get the same information while running `psql` by
 simply typing `\l`.
@@ -698,11 +581,6 @@ by using the following command:
 
 ```
 $ psql -c "\d"
-        List of relations
- Schema |   Name   | Type  |  Owner  
---------+----------+-------+----------
- public | accounts | table | postgres
- public | branches | table | postgres
 ```
 
 
@@ -851,152 +729,6 @@ sizes.
 
 
 
-
-
-
-
-How much disk space does a table use?
-=====================================
-
-
-The maximum supported table size in the default
-configuration is 32 TB and it does not require large file support from
-the operating system. The filesystem size limits do not impact
-the large tables, as they are stored in multiple 1 GB files.
-
-Large tables can suffer performance issues. Indexes can take much longer
-to update and query performance can degrade. In this topic, we will see
-how to measure the size of a table.
-
-
-
-How to do it...
----------------
-
-We can see the size of a table by using this
-command:
-
-
-```
-postgres=# select pg_relation_size('pgbench_accounts');
-```
-
-
-The output of this command is as follows:
-
-
-```
-pg_relation_size
-------------------
-           13582336
-(1 row)
-```
-
-
-We can also see the total size of a table, including indexes and other
-related spaces, as follows:
-
-
-```
-postgres=# select pg_total_relation_size('pgbench_accounts');
-```
-
-
-The output is as follows:
-
-
-```
-pg_total_relation_size
-------------------------
-         15425536
-(1 row)
-```
-
-
-We can also use a `psql` command, like this:
-
-
-```
-postgres=# \dt+ pgbench_accounts
-                        List of relations
- Schema |       Name       | Type  | Owner  | Size  | Description
---------+------------------+-------+--------+-------+-------------
- gianni | pgbench_accounts | table | gianni | 13 MB |
-(1 row)
-```
-
-
-
-
-How it works...
----------------
-
-In PostgreSQL, a table is made up of many
-relations. The main relation is the data table. In addition, there are a
-variety of additional data files. Each index created on a table is also
-a relation. Long data values are placed in a secondary table
-named `TOAST`, so, in most cases, each table also has
-a `TOAST` table and a `TOAST` index.
-
-Each relation consists of multiple data files. The main data files are
-broken into 1 GB pieces. The first file has no suffix; others have a
-numbered suffix (such as `.2`). There are also files
-marked `_vm` and `_fsm`, which represent the
-visibility map and free space map, respectively. They are used as part
-of maintenance operations. They stay fairly small, even for very large
-tables.
-
-
-
-There\'s more...
-----------------
-
-The preceding functions, which measure the size of a relation, output
-the number of bytes, which is normally too large to be immediately
-clear. You can apply
-the `pg_size_pretty()` function to
-format that number nicely, as shown in the following example:
-
-
-```
-SELECT pg_size_pretty(pg_relation_size('pgbench_accounts'));
-```
-
-
-This yields the following output:
-
-
-```
-pg_size_pretty
-----------------
-13 MB
-(1 row)
-```
-
-
-**TOAST** stands for **The Oversized-Attribute Storage Technique**. As
-the name implies, this is a mechanism used to
-store long column values. PostgreSQL allows many data types to store
-values up to 1 GB in size. It transparently stores large data items in
-many smaller pieces, so the same data type can be used for data ranging
-from 1 byte to 1 GB. When appropriate, values are automatically
-compressed and decompressed before they are split and stored, so the
-actual limit will vary, depending on compressibility.
-
-You may also see files ending in `_init`; they are used by
-unlogged tables and their indexes, for restoring them after a crash.
-Unlogged objects are called this way because they do not produce WAL.
-So, they support faster writes, but in the event of a crash they must be
-truncated; that is, restored to an empty state.
-
-
-
-
-
-
-
-
-
 Which are my biggest tables?
 ============================
 
@@ -1072,87 +804,35 @@ people\'s first experience of a PostgreSQL query.
 How to do it...
 ---------------
 
-From any interface, the SQL command used to count rows is as follows:
-
-
-```
-SELECT count(*) FROM table;
-```
-
-
+From any interface, the SQL command used to count rows is as follows.
 This will return a single integer value as the result.
 
 In `psql`, the command looks like the following:
 
 
 ```
-postgres=# select count(*) from orders;
- count 
--------
-   345
-(1 row)
+CREATE TABLE abc
+( id SERIAL PRIMARY KEY
+, descr TEXT);
+
+INSERT INTO abc(descr)
+VALUES
+    ('desc1'),
+    ('desc2'),
+    ('desc2'),
+    ('desc4'),
+    ('desc5');
+
+select count(*) from abc;
 ```
 
+**Output**
 
-
-
-How it works\...
-----------------
-
-PostgreSQL can choose between two techniques available to compute the
-SQL `count(*)` function. Both are available in all the
-currently supported versions:
-
--   The first is called **sequential scan**. We
-    access every data block in the table one after the other, reading
-    the number of rows in each block. If the table is on the disk, it
-    will cause a beneficial disk access pattern,
-    and the statement will be fairly fast.
--   The other technique is known as an **index-only scan**. It requires
-    an index on the table, and it covers a more general
-    case than optimizing SQL queries
-    with `count(*)`.
-
-Some people think that the `count` SQL statement is
-a good test of the performance of a DBMS. Some DBMSs have specific
-tuning features for the `count` SQL statement, and Postgres
-optimizes this using index-only scans. The PostgreSQL project has talked
-about this many times, but few people thought we should try to optimize
-this. Yes, the `count` function is frequently used within
-applications, but without any `WHERE` clause, it is not that
-useful. Therefore, the index-only scans feature has been implemented,
-which applies to more real-world situations, as well as this topic.
-
-We scan every block of the table because of
-a major feature of Postgres, named **Multiversion Concurrency
-Control** (**MVCC**). MVCC allows us to run the `count` SQL
-statement at the same time that we are inserting, updating, or deleting
-data from the table. That\'s a very cool feature, and we went to a lot
-of trouble in Postgres to provide it for you.
-
-MVCC requires us to record information on each row of a table, stating
-when that change was made. If the changes were made after the SQL
-statement began to execute, then we just ignore those changes. This
-means that we need to carry out visibility checks on each row in the
-table to allow us to work out the results of the `count` SQL
-statement. The optimization provided by index-only scans is the ability
-to skip such checks on the table blocks that are already known to be
-visible to all current sessions. Rows in these blocks can be counted
-directly on the index, which is normally smaller than the table, and is,
-therefore, faster.
-
-If you think a little deeper about this, you\'ll see that the result of
-the count SQL statement is just the value at a moment in time. Depending
-on what happens to the table, that value could change a little or a lot
-while the `count` SQL statement is executing. So, once you\'ve
-executed this, all you really know is that, at a particular point in the
-past, there were exactly *x* rows in the table.
-
-
-
-
-
-
+```
+ count 
+-------
+   5
+```
 
 
 
@@ -1175,10 +855,11 @@ rows in a table simply by using its statistics:
 
 
 ```
-EXPLAIN SELECT * FROM mytable;
+EXPLAIN SELECT * FROM abc;
+
                           QUERY PLAN                            
 ----------------------------------------------------------------
- Seq Scan on mytable  (cost=0.00..2640.00 rows=100000 width=97)
+ Seq Scan on abc  (cost=0.00..2640.00 rows=100000 width=97)
 (1 row)
 ```
 
@@ -1192,7 +873,7 @@ SELECT (CASE WHEN reltuples > 0 THEN pg_relation_size(oid)*reltuples/(8192*relpa
 ELSE 0
 END)::bigint AS estimated_row_count
 FROM pg_class
-WHERE oid = 'mytable'::regclass;
+WHERE oid = 'abc'::regclass;
 ```
 
 
@@ -1202,147 +883,20 @@ This gives us the following output:
 ```
  estimated_row_count
 ---------------------
-               99960
+               X
 (1 row)
 ```
 
 
 Both queries return a row count very quickly, no
 matter how large the table that we are examining is, because they use
-statistics that were collected in advance. You may want to create a SQL
-function for the preceding calculation, so you won\'t need to retype the
-SQL code every now and then.
-
-The following function estimates the total number
-of rows using a mathematical procedure
-called **extrapolation**. In other words, we take
-the average number of bytes per row resulting from the last statistics
-collection, and we apply it to the current table size:
-
-
-```
-CREATE OR REPLACE FUNCTION estimated_row_count(text) 
-RETURNS bigint 
-LANGUAGE sql 
-AS $$ 
-SELECT (CASE WHEN reltuples > 0 THEN 
-              pg_relation_size($1)*reltuples/(8192*relpages) 
-             ELSE 0 
-             END)::bigint 
-FROM pg_class 
-WHERE oid = $1::regclass; 
-$$;
-```
-
-
-
-
-How it works...
----------------
-
-We saw the `pg_relation_size()` function earlier, so we know
-that it brings back an accurate value for the current size of the table.
-
-When we vacuum a table in Postgres, we record two pieces of information
-in the `pg_class` catalog entry for the table. These two items
-are the number of data blocks in the table (`relpages`) and
-the number of rows in the table (`reltuples`). Some people
-think they can use the value
-of `reltuples` in `pg_class` as an estimate, but it
-could be severely out of date. You will also be fooled if you use
-information in another table named `pg_stat_user_tables`.
-
-The Postgres optimizer uses
-the `relpages` and `reltuples` values
-to calculate the average rows per block, which is also
-known as the **average tuple density**.
-
-If we assume that the average tuple density
-remains constant over time, then we can calculate the number of rows
-using this formula: *Row estimate = number of data blocks \* rows per
-block*.
-
-We include some code to handle cases where
-the `reltuples` or `relpages` fields are zero. The
-Postgres optimizer actually works a little harder than we do in that
-case, so our estimate isn\'t very good.
-
-The `WHERE oid = 'mytable'::regclass;` syntax introduces the
-concept of object identifier types. They just use a shorthand trick to
-convert the name of an object to the object identifier number for that
-object. The best way to understand this is to think of that syntax as
-meaning the same as a function named `relname2relid()`.
-
-
-
-There\'s more...
-----------------
-
-The good thing about the preceding topic is that it returns a value in
-about the same time, no matter how big the table is. The bad thing about
-it is that `pg_relation_size()` requests a lock on the table,
-so if any other user has an `AccessExclusiveLock` lock
-on the table, then the table size estimate will
-wait for the lock to be released before returning a value.
-
-Err\... so what is an `AccessExclusiveLock` lock? While
-performing a SQL maintenance action, such as changing the data type of a
-column, PostgreSQL will lock out all other actions
-on that table,
-including `pg_relation_size`, which takes a lock in
-the `AccessShareLock` mode. For me, a typical case is when I
-issue some form of SQL maintenance action, such
-as `ALTER TABLE`, and the statement takes much longer than I
-thought it would. At that point, I think, *Oh, was that table bigger
-than I thought?* *How long will I be waiting?* Yes, it\'s better to
-calculate that beforehand, but hindsight doesn\'t get you out of the
-hole you are in right now. So, we need a way to calculate the size of a
-table without needing the lock.
-
-A solution is to look at the operating system files that Postgres uses
-to store data, and figure out how large they are, but that requires a
-high level of security than most people usually allow. In any case,
-looking at files without a lock could cause problems if the table were
-dropped or changed.
-
-
-
-
-
-
+statistics that were collected in advance.
 
 
 
 Listing extensions in this database
 ===================================
 
-
-Every PostgreSQL database contains some objects that
-are automatically brought in when the database is created. Every user
-will find a `pg_database` system catalog that lists databases,
-as shown in the *Listing databases on this database server* topic.
-There is little point in checking whether these objects exist because
-even superusers are not allowed to drop them.
-
-On the other hand, PostgreSQL comes with tens
-of collections of optional objects, called **modules**, or
-equivalently **extensions**. The
-database administrator can install or uninstall
-these objects, depending on the requirements. They are not automatically
-included in a newly created database because they might not be required
-by every use case. Users will install only the extensions they actually
-need, when they need them; an extension can be installed while a
-database is up and running.
-
-In this topic, we will explain how to list
-extensions that have been installed on the current
-database. This is important for getting to know the database better, and
-also because certain extensions affect the behavior of the database.
-
-
-
-How to do it...
----------------
 
 In PostgreSQL, there is a catalog table recording the list of installed
 extensions, so this topic is quite simple. Issue the following command:
@@ -1396,22 +950,6 @@ updated, respectively.
 
 
 
-See also
---------
-
-To get an idea of which extensions are available,
-you can browse the list of additional modules shipped together with
-PostgreSQL, which are almost all extensions, at
-<https://www.postgresql.org/docs/current/static/contrib.html>.
-
-
-
-
-
-
-
-
-
 Understanding object dependencies
 =================================
 
@@ -1455,11 +993,9 @@ them:
     
     ```
     DROP TABLE orders;
-    ERROR: cannot drop table orders because other objects depend on it
-    DETAIL: constraint orderlines_orderid_fkey on table orderlines depends on table orders
-    HINT: Use DROP ... CASCADE to drop the dependent objects too.
     ```
     
+![](./images/5.png)
 
 Be very careful! If you follow the hint, you may
 accidentally remove all the objects that have any dependency on
@@ -1497,9 +1033,7 @@ WHERE confrelid = 'orders'::regclass;
 ```
 
 
-The aforementioned queries only covered constraints between tables. This
-is not the end of the story, so read the *There\'s more\...* section.
-
+The aforementioned queries covered constraints between tables. 
 
 
 How it works...

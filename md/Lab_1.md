@@ -9,8 +9,7 @@ In this lab, we will cover the following topics:
 -   Using the pgAdmin GUI tool
 -   Using the `psql` query and scripting tool
 -   Changing your password securely
--   Avoiding hardcoding your password
--   Using a connection service file
+
 
 Start PostgreSQL server
 =======================
@@ -456,18 +455,11 @@ SET password_encryption = 'scram-sha-256';
 
 Enter a new password. This causes `psql` to send a SQL
 statement to the PostgreSQL server, which contains an already encrypted
-password string. An example of the SQL statement sent is as follows:
-
-
-```
-ALTER USER postgres PASSWORD 'SCRAM-SHA-256$4096:H45+UIZiJUcEXrB9SHlv5Q==$I0mc87UotsrnezRKv9Ijqn/zjWMGPVdy1zHPARAGfVs=:nSjwT9LGDmAsMo+GqbmC2X/9LMgowTQBjUQsl45gZzA=';
-```
+password string.
 
 
 Make sure you use the `SCRAM-SHA-256` encryption, not the
-older and easily compromised MD5 encryption. Whatever you do, don\'t
-use `postgres` as your password. This will make you vulnerable
-to idle hackers, so make it a little more difficult than that!
+older and easily compromised MD5 encryption.
 
 Make sure you don\'t forget your password either. It may prove difficult
 to maintain your database if you can\'t access it.
@@ -487,7 +479,7 @@ such as the following, it will be shipped to the server in plaintext:
 
 
 ```
-ALTER USER postgres PASSWORD 'secret';
+ALTER USER postgres PASSWORD 'postgres';
 ```
 
 
@@ -495,134 +487,6 @@ Luckily, the password in this case will still be stored in an encrypted
 form, but it will also be recorded in plaintext in the `psql`
 history file, as well as in any server and application logs, depending
 on the actual log-level settings.
-
-PostgreSQL doesn\'t enforce a password change cycle, so you may wish to
-use more advanced authentication mechanisms, such
-as GSSAPI, SSPI, LDAP, or RADIUS.
-
-
-
-
-
-
-
-
-
-Avoiding hardcoding your password
-=================================
-
-
-We can all agree that hardcoding your password is
-a bad idea. This topic shows you how to keep your
-password in a secure password file.
-
-
-
-Getting ready
--------------
-
-Not all database users need passwords; some databases use other means of
-authentication. Don\'t perform this step unless you know you will be
-using password authentication and you know your password.
-
-First, remove the hardcoded password from where you set it previously.
-Completely remove the `password = xxxx` text from the
-connection string in a program. Otherwise, when you test the password
-file, the hardcoded setting will override the details you are about to
-place in the file. Keeping the password hardcoded and in the password
-file is not any better. Using `PGPASSWORD` is not recommended
-either, so remove that also.
-
-If you think someone may have seen the password, change your password
-before placing it in the secure password file.
-
-
-
-How to do it...
----------------
-
-A password file contains the usual five fields that we require when
-connecting, as shown here:
-
-
-```
-host:port:dbname:user:password
-```
-
-
-An example of how to set this would be as follows:
-
-
-```
-localhost:5432:postgres:sriggs:moresecure
-```
-
-
-The password file is located using an environment variable
-named `PGPASSFILE`. If `PGPASSFILE` is not set, a
-default filename and location must be searched for, as follows:
-
--   On \*nix systems, look for `~/.pgpass`.
-
--   On Windows systems, look
-    for `%APPDATA%\postgresql\pgpass.conf`,
-    where `%APPDATA%` is the application
-    data subdirectory in the path (for me, that
-    would be `C:\`).
-
-    Note
-
-    Don\'t forget to set the file permissions on
-    the file so that security is maintained. File permissions are not
-    enforced on Windows, although the default location is secure. On
-    \*nix systems, you must issue the following
-    command: `chmod 0600 ~/.pgpass`.
-
-    If you forget to do this, the PostgreSQL client will ignore
-    the `.pgpass` file. While the `psql` tool will
-    issue a clear warning, many other clients will just fail silently,
-    so don›t forget!
-
-
-
-How it works...
----------------
-
-Many people name the password file `.pgpass`, whether or not
-they are on Windows, so don\'t get confused if they do this.
-
-The password file can contain multiple lines. Each line is matched
-against the
-requested `host:port:dbname:user` combination until we find a
-line that matches. Then, we use that password.
-
-Each item can be a literal value or `*`, a wildcard that
-matches anything. There is no support for partial matching. With
-appropriate permissions, a user can potentially connect to any database.
-Using the wildcard in the `dbname` and `port` fields
-makes sense, but it is less useful in other fields. The following are a
-few examples of wildcards:
-
--   `localhost:5432:*:sriggs:moresecurepw`
--   `localhost:5432:perf:hannu:okpw`
--   `localhost:*:perf:gianni:sicurissimo`
-
-
-
-There\'s more...
-----------------
-
-This looks like a good improvement if you have a few database servers.
-If you have many different database servers, you may want to think about
-using a connection service file instead (see the *Using a connection
-service file* topic) or perhaps even storing
-details on a **Lightweight Directory Access Protocol** (**LDAP**)
-server.
-
-
-
-
-
 
 
 
@@ -661,7 +525,7 @@ following content:
 
 ```
 [dbservice1] 
-host=postgres1 
+host=localhost 
 port=5432 
 dbname=postgres
 ```
@@ -685,20 +549,3 @@ service=dbservice1 user=sriggs
 The service can also be set using an environment
 variable named `PGSERVICE`.
 
-
-
-How it works...
----------------
-
-This feature applies to `libpq` connections only, so it does
-not apply to JDBC.
-
-The connection service file can also be used to specify the user,
-although that means that the username will be shared.
-
-The `pg_service.conf` and `.pgpass` files can work
-together, or you can use just one of the two. Note that
-the `pg_service.conf` file is shared, so it is not a suitable
-place for passwords. The per-user connection service file is not shared,
-but in any case, it seems best to keep things separate and confine
-passwords to `.pgpass`.
