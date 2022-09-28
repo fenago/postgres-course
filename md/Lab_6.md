@@ -3,22 +3,6 @@ Lab 6: Performance and Concurrency
 ==================================
 
 
-Performance and concurrency are two problems that are often
-tightly coupled---when concurrency problems are encountered, performance
-usually degrades, in some cases by a lot. If you take care
-of concurrency problems, you will achieve better performance.
-
-In this lab, you will see how to find slow queries and how to find
-queries that make other queries slow.
-
-Performance tuning, unfortunately, is still not an exact science, so you
-may also encounter a performance problem that\'s not covered by any of
-the given methods.
-
-We will also see how to get help in the final topic, *Reporting
-performance problems*, in case none of the other topics that are
-covered here work.
-
 In this lab, we will cover the following topics:
 
 -   Finding slow **SQL** statements
@@ -31,13 +15,6 @@ In this lab, we will cover the following topics:
 -   Using parallel query
 -   Creating time-series tables using partitioning
 -   Using optimistic locking to avoid long lock waits
--   Reporting performance problems
-
-
-
-
-
-
 
 
 
@@ -60,142 +37,7 @@ times a second) and used to run in single-digit **milliseconds**
 (**ms**) but is now running in several tens or even hundreds of
 milliseconds, hence slowing the system down.
 
-Here, we will show you several ways to find statements that are either
-slow or cause the database as a whole to slow down (although they are
-not slow by themselves).
-
-
-
-Getting ready
--------------
-
-Connect to the database as the user whose statements you want to
-investigate or as a superuser to investigate all users\' querie:.
-
-1.  Check that you have the `pg_stat_statements` extension
-    installed:
-    
-    ```
-     postgres=# \x
-     postgres=# \dx pg_stat_statements
-    ```
-    
-2.  Here is a list of our installed extensions:
-    
-    ```
-    -[ RECORD 1 ]-------------------------------------------------------
-    Name        | pg_stat_statements 
-    Version     | 1.9
-    Schema      | public 
-    Description | track execution statistics of all SQL statements executed
-    ```
-    
-3.  If you can\'t see them, then issue the following command:
-    
-    ```
-    postgres=# CREATE EXTENSION pg_stat_statements; 
-    postgres=# ALTER SYSTEM
-              SET shared_preload_libraries = 'pg_stat_statements';
-    ```
-    
-4.  Then, restart the server.
-
-
-
-How to do it...
----------------
-
-Run this query to look at the top 10 highest
-workloads on your server side:
-
-
-```
-postgres=# SELECT calls, total_exec_time, query
-           FROM pg_stat_statements 
-           ORDER BY total_exec_time DESC LIMIT 10;
-```
-
-
-The output is ordered by `total_exec_time`, so it doesn\'t
-matter whether it was a single query or thousands of smaller queries.
-
-Many additional columns are useful in tracking down further information
-about particular entries:
-
-
-```
-postgres=# \d pg_stat_statements 
-          View "public.pg_stat_statements" 
-       Column        |       Type       | Modifiers  
----------------------+------------------+----------- 
- userid              | oid              |  
- dbid                | oid              |
- toplevel            | bool             |
-Unique identifier for SQL
- queryid             | bigint           |  
-The SQL being executed
- query               | text             |
-Number of times planned and timings
- plans               | bigint           |
- total_plan_time     | double precision |
- min_plan_time       | double precision |
- max_plan_time       | double precision |
- mean_plan_time      | double precision |
- stddev_plan_time    | double precision |
-Number of times executed and timings
- calls               | bigint           |  
- total_exec_time     | double precision |  
- min_exec_time       | double precision |  
- max_exec_time       | double precision |  
- mean_exec_time      | double precision |  
- stddev_exec_time    | double precision |  
-Number of rows returned by query
- rows                | bigint           |  
-Columns related to tables that all users can access
- shared_blks_hit     | bigint           |  
- shared_blks_read    | bigint           |  
- shared_blks_dirtied | bigint           |  
- shared_blks_written | bigint           |  
-Columns related to session-specific temporary tables
- local_blks_hit      | bigint           |  
- local_blks_read     | bigint           |  
- local_blks_dirtied  | bigint           |  
- local_blks_written  | bigint           |  
-Columns related to temporary files
- temp_blks_read      | bigint           |  
- temp_blks_written   | bigint           |  
-I/O timing
- blk_read_time       | double precision |  
- blk_write_time      | double precision |
-Columns related to WAL usage
- wal_records         | bigint           |  
- wal_fpi             | bigint           |  
- wal_bytes           | numeric          |
-```
-
-
-
-
-How it works...
----------------
-
-`pg_stat_statements` collects data on all running queries
-by accumulating data in memory, with low overheads.
-
-Similar SQL statements are normalized so that the constants and
-parameters that are used for execution are
-removed. This allows you to see all similar SQL
-statements in one line of the report, rather than seeing thousands of
-lines, which would be fairly useless. While useful, it can sometimes
-mean that it\'s hard to work out which parameter values are actually
-causing the problem.
-
-
-
-There\'s more...
-----------------
-
-Another way to find slow queries is to set up PostgreSQL to log them to
+One way to find slow queries is to set up PostgreSQL to log them to
 the server log. For example, if you decide to
 monitor any query that takes over 10 seconds, then use the following
 command:
@@ -278,9 +120,7 @@ these:
     system itself has bottlenecks such as
     single-core, slow **central processing units** (**CPUs**),
     insufficient memory, or reduced I/O
-    throughput. Those issues may be outside
-    the scope of this book---here, we discuss
-    just the database issues.
+    throughput.
 
 The first issue can be handled as described in the *Reducing the number
 of rows returned* topic. The rest of the preceding reasons can be
@@ -308,18 +148,9 @@ the SQL performance is reduced by one of the earlier mentioned issues:
 
 ```
 postgres=# EXPLAIN (ANALYZE, BUFFERS) SELECT count(*) FROM t;
-                        QUERY PLAN
---------------------------------------------------------------
-  Aggregate  (cost=4427.27..4427.28 rows=1 width=0) \
-            (actual time=32.953..32.954 rows=1 loops=1)
-    Buffers: shared hit=X read=Y
-   ->  Seq Scan on t  (cost=0.00..4425.01 rows=901 width=0) \
-              (actual time=30.350..31.646 rows=901 loops=1)
-          Buffers: shared hit=X read=Y
- Planning time: 0.045 ms
-  Execution time: 33.128 ms
-(6 rows)
 ```
+
+![](./images/12.png)
 
 
 Let\'s use this technique to look at
@@ -343,39 +174,15 @@ which you want to get the top three rows:
 
 ```
 postgres=# CREATE TABLE events(id SERIAL);
-CREATE TABLE
+
+
 postgres=# INSERT INTO events SELECT generate_series(1,1000000);
-INSERT 0 1000000
+
 postgres=# EXPLAIN (ANALYZE)
              SELECT * FROM events ORDER BY id DESC LIMIT 3;
-                        QUERY PLAN
---------------------------------------------------------------
-  Limit  (cost=25500.67..25500.68 rows=3 width=4) \
-        (actual time=3143.493..3143.502 rows=3 loops=1)
-    ->  Sort  (cost=25500.67..27853.87 rows=941280 width=4)
-           (actual time=3143.488..3143.490 rows=3 loops=1)
-         Sort Key: id DESC
-         Sort Method: top-N heapsort Memory: 25kB
-    ->  Seq Scan on events
-           (cost=0.00..13334.80 rows=941280 width=4)
-           (actual time=0.105..1534.418 rows=1000000 loops=1)
- Planning time: 0.331 ms
- Execution time: 3143.584 ms
-(10 rows)
-postgres=# CREATE INDEX events_id_ndx ON events(id);
-CREATE INDEX
-postgres=# EXPLAIN (ANALYZE)
-             SELECT * FROM events ORDER BY id DESC LIMIT 3;
-                        QUERY PLAN
---------------------------------------------------------------------
-  Limit  (cost=0.00..0.08 rows=3 width=4) (actual 
-   time=0.295..0.311 rows=3 loops=1)
-   ->  Index Scan Backward using events_id_ndx on events
-        (cost=0.00..27717.34 rows=1000000 width=4) (actual 
-        time=0.289..0.295 rows=3 loops=1)
- Total runtime: 0.364 ms
-(3 rows)
 ```
+
+![](./images/13.png)
 
 
 This produces a huge difference in query runtime,
@@ -401,35 +208,6 @@ the `idx_scan` and `idx_tup_fetch` columns show
 whether indexes are being used and how effective they are.
 
 
-
-There\'s more...
-----------------
-
-If not enough of the data fits in the shared buffers, lots of rereading
-of the same data happens, causing performance issues.
-In `pg_statio_user_tables`, watch
-the `heap_blks_hit` and `heap_blks_read` fields, or
-the equivalent ones for index and toast relations. They give you a
-fairly good idea of how much of your data is found in PostgreSQL\'s
-shared buffers (`heap_blks_hit`) and how much had to be
-fetched from the disk (`heap_blks_read`). If you see large
-numbers of blocks being read from the disk continuously, you may
-want to tune those queries; if you determine that
-the disk reads were justified, you can make the
-configured `shared_buffers` value bigger.
-
-If your `shared_buffers` parameter is tuned properly and you
-can\'t rewrite the query to perform less block I/O, you might need a
-bigger server.
-
-You can find a lot of resources on the web that explain how shared
-buffers work and how to set them based on your available hardware
-and your expected data access patterns. Our professional advice is to
-always test your database servers and perform benchmarks before you
-deploy them in production. Information on
-the `shared_buffers` configuration
-parameter can be found
-at <http://www.postgresql.org/docs/current/static/runtime-config-resource.html>.
 
 ### Locking problems
 
@@ -494,142 +272,9 @@ uninterruptible state (usually waiting for I/O).
 
 
 
-See also
---------
-
-For further information on the syntax of the `EXPLAIN` SQL
-command, refer to the PostgreSQL documentation
-at <http://www.postgresql.org/docs/current/static/sql-explain.html>.
-
-
-
-
-
-
-
-
-
 Reducing the number of rows returned
 ====================================
 
-
-Although the problem often produces too many rows in the first place, it
-is made worse by returning all unnecessary rows
-to the client. This is especially true if the client and server are not
-on the same host.
-
-Here are some ways to reduce the traffic between the client and server.
-
-
-
-How to do it...
----------------
-
-Consider the following scenario: a full-text search returns 10,000
-documents, but only the first 20 are displayed to users. In this case,
-order the documents by rank on the server, and return only the top 20
-that actually need to be displayed:
-
-
-```
-SELECT title, ts_rank_cd(body_tsv, query, 20) AS text_rank
-FROM articles, plainto_tsquery('spicy potatoes') AS query
-WHERE body_tsv @@ query
-ORDER BY rank DESC
-LIMIT 20
-;
-```
-
-
-The `ORDER BY` clause ensures the rows are ranked, and then
-the `LIMIT 20` returns only the top 20.
-
-If you need the next 20 documents, don\'t just query with a limit of 40
-and throw away the first 20. Instead,
-use `OFFSET 20 LIMIT 20` to return the next 20 documents.
-
-The SQL optimizer understands the
-`LIMIT` clause and will change the execution plan accordingly.
-
-To gain some stability so that documents with the same rank still come
-out in the same order when using `OFFSET 20`, add a unique
-field (such as the `id` column of
-the `articles` table) to `ORDER BY` in both queries:
-
-
-```
-SELECT title, ts_rank_cd(body_tsv, query, 20) AS text_rank
-FROM articles, plainto_tsquery('spicy potatoes') AS query
-WHERE body_tsv @@ query
-ORDER BY rank DESC, articles.id
-OFFSET 20 LIMIT 20;
-```
-
-
-Another use case is an application that requests all products of a
-branch office so that it can run a complex calculation over them. In
-such a case, try to do as much data analysis as possible inside the
-database.
-
-There is no need to run the following:
-
-
-```
-SELECT * FROM accounts WHERE branch_id = 7;
-```
-
-
-Also, instead of counting and summing the rows on the client side, you
-can run this:
-
-
-```
-SELECT count(*), sum(balance) FROM accounts WHERE branch_id = 7;
-```
-
-
-With some research on SQL, you can carry out an amazingly large portion
-of your computation using plain SQL (for example, do not underestimate
-the power of window functions).
-
-If SQL is not enough, you can use **Procedural Language/PostgreSQL**
-(**PL/pgSQL**) or any other
-embedded procedural language supported by
-PostgreSQL for even more flexibility.
-
-
-
-There\'s more...
-----------------
-
-Consider one more scenario: an application runs a huge number of small
-lookup queries. This can easily happen with modern **object-relational
-mappers** (**ORMs**) and other toolkits that do a
-lot of work for the programmer but, at the same
-time, hide a lot of what is happening.
-
-For example, if you define a **HyperText Markup Language** (**HTML**)
-report over a query in a templating language and
-then define a lookup function to resolve an **identifier** (**ID**)
-inside the template, you may end up with a form that
-performs a separate, small lookup for each row
-displayed, even when most of the values looked up are the same. This
-doesn\'t usually pose a big problem for the database, as queries of
-the `SELECT name FROM departments WHERE id = 7` form are
-really fast when the row for `id = 7` is in shared buffers.
-However, repeating this query thousands of times still takes seconds due
-to network latency, process scheduling for each request, and other
-factors.
-
-The two proposed solutions are as follows:
-
--   Make sure that the value is cached by your ORM
--   Perform the lookup inside the query that gets the main data so that
-    it can be displayed directly
-
-Exactly how to carry out these solutions depends on the toolkit, but
-they are both worth investigating as they really can make a difference
-in speed and resource usage.
 
 PostgreSQL 9.5 introduced the `TABLESAMPLE` clause into SQL.
 This allows you to run commands much faster by
@@ -671,406 +316,6 @@ Planning time: 0.066 ms
  Execution time: 4.702 ms 
 (7 rows)
 ```
-
-
-
-
-
-
-
-
-
-
-Simplifying complex SQL queries
-===============================
-
-
-There are two types of complexity that you can encounter in SQL queries.
-
-First, the complexity can be directly visible in
-the query if it has hundreds---or even thousands---of rows of SQL code
-in a single query. This can cause both maintenance headaches and
-slow execution.
-
-This complexity can also be hidden in subviews, so the SQL code of the
-query may seem simple but it uses other views and/or functions to do
-part of the work, which can, in turn, use others. This is much better
-for maintenance, but it can still cause performance problems.
-
-Both types of queries can either be written manually by programmers or
-data analysts or emerge as a result of a query generator.
-
-
-
-Getting ready
--------------
-
-First, verify that you really have a complex query.
-
-A query that simply returns lots of database fields is not complex in
-itself. In order to be complex, the query has to join lots of tables in
-complex ways.
-
-The easiest way to find out whether a query is complex is to look at the
-output of `EXPLAIN`. If it has lots of rows, the query is
-complex, and it\'s not just that there is a lot of text that makes it
-so.
-
-All of the examples in this topic have been written with a very typical
-use case in mind: sales.
-
-What follows is a description of a fictitious model that\'s used in this
-topic. The most important fact is the `sale` event, stored in
-the `sale` table (I specifically used the word *fact*, as this
-is the right term to use in a *data
-warehousing* context). Every sale takes place at a point of sale
-(the `salespoint` table) at a specific time and involves an
-item. That item is stored in a warehouse (see
-the `item` and `warehouse` tables, as well as
-the `item_in_wh` link table).
-
-Both `warehouse` and `salespoint` are located in a
-geographical area (the `location` table). This is important,
-for example, to study the provenance of a transaction.
-
-Here is a simplified **entity-relationship model** (**ERM**), which is
-useful for understanding all of the joins that
-occur in the following queries:
-
-
-
-![](./images/B17944_10_001.jpg)
-
-
-
-
-
-
-
-
-How to do it...
----------------
-
-Simplifying a query usually means restructuring it so that parts of it
-can be defined separately and then used by other parts.
-
-We\'ll illustrate these possibilities by rewriting the
-following query in several ways.
-
-The complex query in our example case is a
-so-called **pivot** or **cross-tab** query. This query retrieves the
-quarterly profit for
-non-local sales from all shops, as shown in the
-following code snippet:
-
-
-```
-SELECT shop.sp_name AS shop_name,
-       q1_nloc_profit.profit AS q1_profit,
-       q2_nloc_profit.profit AS q2_profit,
-       q3_nloc_profit.profit AS q3_profit,
-       q4_nloc_profit.profit AS q4_profit,
-       year_nloc_profit.profit AS year_profit
-  FROM (SELECT * FROM salespoint ORDER BY sp_name) AS shop
-  LEFT JOIN (
-       SELECT
-          spoint_id,
-          sum(sale_price) - sum(cost) AS profit,
-          count(*) AS nr_of_sales
-        FROM sale s
-        JOIN item_in_wh iw ON s.item_in_wh_id=iw.id
-        JOIN item i ON iw.item_id = i.id
-        JOIN salespoint sp ON s.spoint_id = sp.id
-        JOIN location sploc ON sp.loc_id = sploc.id
-        JOIN warehouse wh ON iw.whouse_id = wh.id
-        JOIN location whloc ON wh.loc_id = whloc.id
-       WHERE sale_time >= '2013-01-01'
-         AND sale_time < '2013-04-01'
-         AND sploc.id != whloc.id
-       GROUP BY 1
-      ) AS q1_nloc_profit
-      ON shop.id = Q1_NLOC_PROFIT.spoint_id
-  LEFT JOIN (
-< similar subquery for 2nd quarter >
-      ) AS q2_nloc_profit
-      ON shop.id = q2_nloc_profit.spoint_id
-  LEFT JOIN (
-< similar subquery for 3rd quarter >
-      ) AS q3_nloc_profit
-      ON shop.id = q3_nloc_profit.spoint_id
-  LEFT JOIN (
-< similar subquery for 4th quarter >
-      ) AS q4_nloc_profit
-      ON shop.id = q4_nloc_profit.spoint_id
-  LEFT JOIN (
-< similar subquery for full year >
-      ) AS year_nloc_profit
-      ON shop.id = year_nloc_profit.spoint_id
-ORDER BY 1;
-```
-
-
-Since the preceding query has an almost identical
-repeating part for finding the sales for a period (the four quarters of
-2013, in this case), it makes sense to move it to a separate view (for
-the whole year) and then use that view in the main reporting query, as
-follows:
-
-
-```
-CREATE VIEW non_local_quarterly_profit_2013 AS
-       SELECT
-          spoint_id,
-          extract('quarter' from sale_time) as sale_quarter,
-          sum(sale_price) - sum(cost) AS profit,
-          count(*) AS nr_of_sales
-         FROM sale s
-         JOIN item_in_wh iw ON s.item_in_wh_id=iw.id
-         JOIN item i ON iw.item_id = i.id
-         JOIN salespoint sp ON s.spoint_id = sp.id
-         JOIN location sploc ON sp.loc_id = sploc.id
-         JOIN warehouse wh ON iw.whouse_id = wh.id
-         JOIN location whloc ON wh.loc_id = whloc.id
-       WHERE sale_time >= '2013-01-01'
-         AND sale_time < '2014-01-01'
-         AND sploc.id != whloc.id
-       GROUP BY 1,2;
-SELECT shop.sp_name AS shop_name,
-       q1_nloc_profit.profit as q1_profit,
-       q2_nloc_profit.profit as q2_profit,
-       q3_nloc_profit.profit as q3_profit,
-       q4_nloc_profit.profit as q4_profit,
-       year_nloc_profit.profit as year_profit
-  FROM (SELECT * FROM salespoint ORDER BY sp_name) AS shop
-  LEFT JOIN non_local_quarterly_profit_2013 AS q1_nloc_profit
-      ON shop.id = Q1_NLOC_PROFIT.spoint_id
-   AND q1_nloc_profit.sale_quarter = 1
-  LEFT JOIN non_local_quarterly_profit_2013 AS q2_nloc_profit
-      ON shop.id = Q2_NLOC_PROFIT.spoint_id
-  AND q2_nloc_profit.sale_quarter = 2
-  LEFT JOIN non_local_quarterly_profit_2013 AS q3_nloc_profit
-      ON shop.id = Q3_NLOC_PROFIT.spoint_id
-  AND q3_nloc_profit.sale_quarter = 3
-  LEFT JOIN non_local_quarterly_profit_2013 AS q4_nloc_profit
-      ON shop.id = Q4_NLOC_PROFIT.spoint_id
-  AND q4_nloc_profit.sale_quarter = 4
-  LEFT JOIN (
-        SELECT spoint_id, sum(profit) AS profit
-          FROM non_local_quarterly_profit_2013 GROUP BY 1
-      ) AS year_nloc_profit
-      ON shop.id = year_nloc_profit.spoint_id
-ORDER BY 1;
-```
-
-
-Moving the subquery to a view has not only made
-the query shorter but also easier to understand and maintain.
-
-You might want to consider **materialized views**---more on this later.
-
-Before that, we will be using common table expressions (also known
-as `WITH` queries) instead of a separate view. Starting with
-PostgreSQL version 8.4, you can use a `WITH` statement to
-define a view in line, as follows:
-
-
-```
-WITH nlqp AS (
-      SELECT
-          spoint_id,
-          extract('quarter' from sale_time) as sale_quarter,
-          sum(sale_price) - sum(cost) AS profit,
-          count(*) AS nr_of_sales
-        FROM sale s
-        JOIN item_in_wh iw ON s.item_in_wh_id=iw.id
-        JOIN item i ON iw.item_id = i.id
-        JOIN salespoint sp ON s.spoint_id = sp.id
-        JOIN location sploc ON sp.loc_id = sploc.id
-        JOIN warehouse wh ON iw.whouse_id = wh.id
-        JOIN location whloc ON wh.loc_id = whloc.id
-       WHERE sale_time >= '2013-01-01'
-        AND sale_time < '2014-01-01'
-        AND sploc.id != whloc.id
-       GROUP BY 1,2
-)
-SELECT shop.sp_name AS shop_name,
-       q1_nloc_profit.profit as q1_profit,
-       q2_nloc_profit.profit as q2_profit,
-       q3_nloc_profit.profit as q3_profit,
-       q4_nloc_profit.profit as q4_profit,
-       year_nloc_profit.profit as year_profit
-  FROM (SELECT * FROM salespoint ORDER BY sp_name) AS shop
-  LEFT JOIN nlqp AS q1_nloc_profit
-       ON shop.id = Q1_NLOC_PROFIT.spoint_id
-   AND q1_nloc_profit.sale_quarter = 1
-  LEFT JOIN nlqp AS q2_nloc_profit
-       ON shop.id = Q2_NLOC_PROFIT.spoint_id
-   AND q2_nloc_profit.sale_quarter = 2
-  LEFT JOIN nlqp AS q3_nloc_profit
-       ON shop.id = Q3_NLOC_PROFIT.spoint_id
-   AND q3_nloc_profit.sale_quarter = 3
-  LEFT JOIN nlqp AS q4_nloc_profit
-       ON shop.id = Q4_NLOC_PROFIT.spoint_id
-   AND q4_nloc_profit.sale_quarter = 4
-  LEFT JOIN (
-        SELECT spoint_id, sum(profit) AS profit
-         FROM nlqp GROUP BY 1
-      ) AS year_nloc_profit
-      ON shop.id = year_nloc_profit.spoint_id
-ORDER BY 1;
-```
-
-
-For more information on `WITH` queries
-(also known as **Common Table Expressions** (**CTEs**)), read the
-official documentation
-at <http://www.postgresql.org/docs/current/static/queries-with.html>.
-
-
-
-There\'s more...
-----------------
-
-Another ace in the hole is represented by temporary tables that are used
-for parts of a query. By default, a temporary table is dropped at the
-end of a Postgres session, but the behavior can be changed at the time
-of creation.
-
-PostgreSQL itself can choose to materialize parts of a query during the
-query optimization phase but, sometimes, it fails to make the best
-choice for the query plan, either due to insufficient
-statistics or because---as can happen for large
-query plans where **Genetic Query Optimization** (**GEQO**) is used---it
-may have just overlooked some possible query plans.
-
-If you think that materializing (separately preparing) some parts of a
-query is a good idea, you can do this by using a temporary table, simply
-by
-running `CREATE TEMPORARY TABLE my_temptable01 AS <the part of the query you want to materialize>` and
-then using `my_temptable01` in the main query, instead of the
-materialized part.
-
-You can even create indexes on a temporary table for PostgreSQL to use
-in the main query:
-
-
-```
-BEGIN;
-CREATE TEMPORARY TABLE nlqp_temp ON COMMIT DROP
- AS
-      SELECT
-          spoint_id,
-          extract('quarter' from sale_time) as sale_quarter,
-          sum(sale_price) - sum(cost) AS profit,
-          count(*) AS nr_of_sales
-        FROM sale s
-        JOIN item_in_wh iw ON s.item_in_wh_id=iw.id
-        JOIN item i ON iw.item_id = i.id
-        JOIN salespoint sp ON s.spoint_id = sp.id
-        JOIN location sploc ON sp.loc_id = sploc.id
-        JOIN warehouse wh ON iw.whouse_id = wh.id
-        JOIN location whloc ON wh.loc_id = whloc.id
-       WHERE sale_time >= '2013-01-01'
-         AND sale_time < '2014-01-01'
-         AND sploc.id != whloc.id
-       GROUP BY 1,2
-;
-```
-
-
-You can create indexes on a table and analyze the temporary table here:
-
-
-```
-SELECT shop.sp_name AS shop_name,
-       q1_NLP.profit as q1_profit,
-       q2_NLP.profit as q2_profit,
-       q3_NLP.profit as q3_profit,
-       q4_NLP.profit as q4_profit,
-       year_NLP.profit as year_profit
-  FROM (SELECT * FROM salespoint ORDER BY sp_name) AS shop
-  LEFT JOIN nlqp_temp AS q1_NLP
-      ON shop.id = Q1_NLP.spoint_id AND q1_NLP.sale_quarter = 1
-  LEFT JOIN nlqp_temp AS q2_NLP
-      ON shop.id = Q2_NLP.spoint_id AND q2_NLP.sale_quarter = 2
-  LEFT JOIN nlqp_temp AS q3_NLP
-      ON shop.id = Q3_NLP.spoint_id AND q3_NLP.sale_quarter = 3
-  LEFT JOIN nlqp_temp AS q4_NLP
-      ON shop.id = Q4_NLP.spoint_id AND q4_NLP.sale_quarter = 4
-  LEFT JOIN (
-        select spoint_id, sum(profit) AS profit FROM nlqp_temp GROUP BY 1
-      ) AS year_NLP
-      ON shop.id = year_NLP.spoint_id
-ORDER BY 1
-;
-COMMIT; -- here the temp table goes away
-```
-
-
-### Using materialized views
-
-If the part you put in the temporary table is large, does not change
-very often, and/or is hard to compute, then you
-may be able to do it less often for each query by using a technique
-named **materialized views**.
-
-Materialized views are views that are prepared before they are used
-(similar to a cached table). They are either fully regenerated as
-underlying data changes or, in some cases, can update only those rows
-that depend on the changed data.
-
-PostgreSQL natively supports materialized views through
-the `CREATE MATERIALIZED VIEW`, `ALTER MATERIALIZED VIEW`, `REFRESH MATERIALIZED VIEW`,
-and `DROP MATERIALIZED VIEW` commands. At the time of writing,
-PostgreSQL only supports full regeneration of materialized tables using
- `REFRESH` `MATERIALIZED VIEW CONCURRENTLY`, though
-this uses a parallel query to execute very quickly.
-
-A fundamental aspect of materialized views is
-that they can have their own indexes, as with any other table.
-See <http://www.postgresql.org/docs/current/static/sql-creatematerializedview.html> for
-more information on creating materialized views.
-
-For instance, you can rewrite the example in the previous topic using
-a materialized view instead of a temporary table:
-
-
-```
-CREATE MATERIALIZED VIEW nlqp_temp AS
-       SELECT spoint_id,
-            extract('quarter' from sale_time) as sale_quarter,
-            sum(sale_price) - sum(cost) AS profit,
-            count(*) AS nr_of_sales
-       FROM sale s
-       JOIN item_in_wh iw ON s.item_in_wh_id=iw.id
-       JOIN item i ON iw.item_id = i.id
-       JOIN salespoint sp ON s.spoint_id = sp.id
-       JOIN location sploc ON sp.loc_id = sploc.id
-       JOIN warehouse wh ON iw.whouse_id = wh.id
-       JOIN location whloc ON wh.loc_id = whloc.id
-            WHERE sale_time >= '2013-01-01'
-            AND sale_time < '2014-01-01'
-            AND sploc.id != whloc.id
-            GROUP BY 1,2
-```
-
-
-### Using set-returning functions for some parts of queries
-
-Another possibility for achieving similar results
-to temporary tables and/or materialized views is by using
-a **set-returning function** for some parts of the query.
-
-It is easy to have a materialized view freshness check inside a
-function. However, detailed analysis and an overview of these techniques
-go beyond the goals of this book, as they require a deep understanding
-of the PL/pgSQL procedural language.
-
-
-
-
-
-
 
 
 
@@ -1320,12 +565,6 @@ distribution of data between tables.
 
 
 
-
-
-
-
-
-
 Discovering why a query is not using an index
 =============================================
 
@@ -1350,6 +589,7 @@ better to do this only on specific tables:
 
 ```
 postgres=# ANALYZE;
+
 ANALYZE
 ```
 
@@ -1365,6 +605,7 @@ follows:
 
 ```
 postgres=# EXPLAIN ANALYZE SELECT count(*) FROM itable WHERE id > 500;
+
                          QUERY PLAN
 ---------------------------------------------------------------------
   Aggregate  (cost=188.75..188.76 rows=1 width=0)
@@ -1374,9 +615,13 @@ postgres=# EXPLAIN ANALYZE SELECT count(*) FROM itable WHERE id > 500;
          Filter: (id > 500)
  Total runtime: 38.027 ms
 (4 rows)
+
 postgres=# SET enable_seqscan TO false;
 SET
+
 postgres=# EXPLAIN ANALYZE SELECT count(*) FROM itable WHERE id > 500;
+
+
                          QUERY PLAN
 ---------------------------------------------------------------------
   Aggregate  (cost=323.25..323.26 rows=1 width=0)
@@ -2149,43 +1394,3 @@ was a sufficient balance in Bob\'s account. The output will also return
 a number, telling you the balance `bob` has left after this
 operation.
 
-
-
-
-
-
-
-
-
-Reporting performance problems
-==============================
-
-
-Sometimes, you face performance issues and feel lost, but you should
-never feel alone when working with one of the
-most successful open source projects ever.
-
-
-
-How to do it...
----------------
-
-If you need to get some advice on your
-performance problems, then the right place to do so is
-the performance mailing list
-at <http://archives.postgresql.org/pgsql-performance/>.
-
-First, you may want to ensure that it is not a well-known problem by
-searching the mailing-list archives.
-
-A very good description of what to include in
-your performance problem report is available
-at <http://wiki.postgresql.org/wiki/Guide_to_reporting_problems>.
-
-
-
-There\'s more...
-----------------
-
-More performance-related information can be found
-at <http://wiki.postgresql.org/wiki/Performance_Optimization>.

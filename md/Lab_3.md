@@ -11,7 +11,6 @@ In this lab, we will cover the following topics:
 -   Finding a unique key for a set of data
 -   Generating test data
 -   Loading data from a spreadsheet
--   Loading data from flat files
 -   Making bulk data changes using server-side procedures with
     transactions
 
@@ -1252,67 +1251,11 @@ show that more than 50% of smaller data stores are
 held in spreadsheets or small desktop databases. Loading data from these
 sources is a frequent and important task for many DBAs.
 
-
-
-Getting ready
--------------
-
-Spreadsheets combine data, presentation, and programs all into one file.
-That\'s perfect for power users wanting to work quickly. As with other
-relational databases, PostgreSQL is mainly concerned with the lowest
-level of data, so extracting just data from these spreadsheets can
-present some challenges.
-
-We can easily handle spreadsheet data if that spreadsheet\'s layout
-follows a very specific form, as follows:
-
--   Each spreadsheet column becomes one column in one table.
--   Each row of the spreadsheet becomes one row in one table.
--   Data is only in one worksheet of the spreadsheet.
--   Optionally, the first row is a list of column descriptions/titles.
-
-This is a very simple layout, and more often, there will be other things
-in the spreadsheet, such as titles, comments, constants for use in
-formulas, summary lines, macros, and images. If you\'re in this
-position, the best thing to do is to create a new worksheet
-within the spreadsheet in the pristine
-form described earlier and then set up
-cross-worksheet references to bring in the data. An example of a
-cross-worksheet reference would be `=Sheet2.A1`. You\'ll need
-a separate worksheet for each set of data, which will become one table
-in PostgreSQL. You can load multiple worksheets into one table, however.
-
-Some spreadsheet users will say that all of this is unnecessary and is
-evidence of the problems of databases. The real spreadsheet gurus do
-actually advocate this type of layout -- data in one worksheet and
-calculation and presentation in other worksheets. So, it is actually a
-best practice to design spreadsheets in this way; however, we must work
-with the world the way it is.
-
-
-
-How to do it\...
-----------------
-
 Here, we will show you an example where data in a spreadsheet is loaded
 into a database:
 
-1.  If your spreadsheet data is neatly laid out in a single worksheet,
-    as shown in the following screenshot, then you can go
-    to **File** \| **Save As** and then select **CSV** as the file type
-    to be saved:
 
-
-
-![](./images/B17944_05_01.jpg)
-
-
-
-
-
-
-1.  This will export the current worksheet to a
-    file, as follows:
+1.  Create a csv file `sample.csv` with following content:
     
     ```
     "Key","Value" 
@@ -1341,6 +1284,8 @@ into a database:
        2 | d
     ```
     
+    ![](./images/11.png)
+
 4.  Alternatively, from the command line, this would be as follows:
     
     ```
@@ -1373,287 +1318,6 @@ a user who has been granted one of the `pg_read_server_files`,
 the server process is allowed to read that file, then transfer the data
 yourself to the server, and finally, load the file. These privileges are
 not commonly granted, which is why we prefer the earlier method.
-
-The `COPY` (or `\COPY`) command does not create the
-table for you; that must be done beforehand. Note also that
-the `HEADER` option does nothing but ignore the first line of
-the input file, so the names of the columns from
-the `.csv` file don\'t need to match those of
-the `Postgres` table. If it hasn\'t occurred to you yet, this
-is also a problem. If you say `HEADER` and the file does not
-have a header line, then all it does is ignore the first data row.
-Unfortunately, there\'s no way for PostgreSQL to tell whether the first
-line of the file is truly a header or not. Be careful!
-
-There isn\'t a standard tool to load data directly from the spreadsheet
-to the database. It\'s fairly simple to write a spreadsheet macro to
-automate the aforementioned tasks, but that\'s not a topic for this
-book.
-
-
-
-How it works\...
-----------------
-
-The `\COPY` command executes a `COPY` SQL statement,
-so the two methods described earlier are very similar. There\'s more to
-be said about `COPY`, so we\'ll cover that in the next topic.
-
-Under the covers, the `\COPY` command
-executes a `COPY … FROM STDIN` command. When using this form
-of command, the client program must read the file
-and feed the data to the server. psql does this for you, but in other
-contexts, you can use this mechanism to avoid the need for higher
-privileges or additional roles, which are needed when running
-`COPY` with an absolute filename.
-
-
-
-There\'s more\...
------------------
-
-There are many data extraction and loading tools available out there,
-some cheap and some expensive. Remember that the hardest part of
-loading data from any spreadsheet is separating the data from all the
-other things it contains. I\'ve not yet seen a tool that can help with
-that! This is why the best practice for spreadsheets is to separate data
-into separate worksheets.
-
-
-
-
-
-
-
-
-
-Loading data from flat files
-============================
-
-
-Loading data into your database is one of the most
-important tasks. You need to do this accurately
-and quickly. Here\'s how.
-
-
-
-Getting ready
--------------
-
-For basic loading, `COPY` works well for many cases, including
-CSV files, as shown in the last topic.
-
-If you want advanced functionality for loading, you may wish to
-try `pgloader`, which is commonly available in all main
-software distributions. At the time of writing, the current stable
-version is 3.6.3. There are many features, but it is stable, with very
-few new features in recent years.
-
-
-
-How to do it\...
-----------------
-
-To load data with `pgloader`, we need to
-understand our requirements, so let\'s break this
-down into a step-by-step process, as follows:
-
-1.  Identify the data files and where they are located. Make sure
-    that `pgloader` is installed in the location of the files.
-2.  Identify the table into which you are loading, ensure that you have
-    the permissions to load, and check the available space. Work out the
-    file type (examples include fixed-size fields, delimited text, and
-    CSV) and check the encoding.
-3.  Specify the mapping between columns in the file and columns on the
-    table being loaded. Make sure you know which columns in the file are
-    not needed -- `pgloader` allows you to include only the
-    columns you want. Identify any columns in the table for which you
-    don\'t have data. Do you need them to have a default value on the
-    table, or does `pgloader` need to generate values for
-    those columns through functions or constants?
-4.  Specify any transformations that need to take place. The most common
-    issue is date formats, although it\'s possible that there may be
-    other issues.
-5.  Write the `pgloader` script.
-6.  The `pgloader` script will create a log file to record
-    whether the load has succeeded or failed, and another file to store
-    rejected rows. You need a directory with sufficient disk space if
-    you expect them to be large. Their size is roughly proportional to
-    the number of failing rows.
-7.  Finally, consider what settings you need for performance options.
-    This is definitely last, as fiddling with things earlier can lead to
-    confusion when you\'re still making the load work correctly.
-8.  You must use a script to execute `pgloader`. This is not a
-    restriction; actually, it is more like a best practice, because it
-    makes it much easier to iterate toward something that works. Loads
-    never work the first time, except in the movies!
-
-Let\'s look at a typical example from the
-quick-start documentation of `pgloader`,
-the `csv.load` file. 
-
-Define the required operations in a command and
-save it in a file, such as `csv.load`:
-
-
-```
-LOAD CSV
-   FROM '/tmp/file.csv' (x, y, a, b, c, d)
-   INTO postgresql://postgres@localhost:5432/postgres?csv (a, b, d, c)
-     WITH truncate,
-          skip header = 1,
-          fields optionally enclosed by '"',
-          fields escaped by double-quote,
-          fields terminated by ','
-      SET client_encoding to 'latin1',
-          work_mem to '12MB',
-          standard_conforming_strings to 'on'
-   BEFORE LOAD DO
-    $$ drop table if exists csv; $$,
-    $$ create table csv (
-        a bigint,
-        b bigint,
-        c char(2),
-        d text
-       );
-  $$;
-```
-
-
-This command allows us to load the following CSV file content. Save this
-in a file, such as `file.csv`, under
-the `/tmp` directory:
-
-
-```
-Header, with a © sign
-"2.6.190.56","2.6.190.63","33996344","33996351","GB","United Kingdom"
-"3.0.0.0","4.17.135.31","50331648","68257567","US","United States"
-"4.17.135.32","4.17.135.63","68257568","68257599","CA","Canada"
-"4.17.135.64","4.17.142.255","68257600","68259583","US","United States"
-"4.17.143.0","4.17.143.15","68259584","68259599","CA","Canada"
-"4.17.143.16","4.18.32.71","68259600","68296775","US","United States"
-```
-
-
-We can use the following `load` script:
-
-
-```
-pgloader csv.load
-```
-
-
-Here\'s what gets loaded in the PostgreSQL
-database:
-
-
-```
-postgres=# select * from csv;
-    a     |    b     | c  |     d
-----------+----------+----+----------------
- 33996344 | 33996351 | GB | United Kingdom
- 50331648 | 68257567 | US | United States
- 68257568 | 68257599 | CA | Canada
- 68257600 | 68259583 | US | United States
- 68259584 | 68259599 | CA | Canada
- 68259600 | 68296775 | US | United States
-(6 rows)
-```
-
-
-
-
-How it works...
----------------
-
-`pgloader` copes gracefully with errors.
-The `COPY` command loads all rows in a single transaction, so
-only a single error is enough to abort the
-load. `pgloader` breaks down an input file into reasonably
-sized chunks and loads them piece by piece. If some rows in a chunk
-cause errors, then `pgloader` will split it iteratively until
-it loads all the good rows and skips all the bad rows, which are then
-saved in a separate rejects file for later inspection. This behavior is
-very convenient if you have large data files with a small percentage of
-bad rows -- for instance, you can edit the rejects, fix them, and
-finally, load them with another `pgloader` run.
-
-Versions from the 2.x iteration of `pgloader` were written in
-Python and connected to PostgreSQL through the standard Python client
-interface. Version 3.x is written in Common Lisp.
-Yes, `pgloader` is less efficient than loading data files
-using a `COPY` command, but running a `COPY` command
-has many more restrictions: the file has to be in the right place on the
-server, has to be in the right format, and must be unlikely to throw
-errors on loading. `pgloader` has additional overhead, but it
-also has the ability to load data using multiple parallel threads, so it
-can be faster to use as well. The ability of `pgloader` to
-reformat the data via user-defined functions is often essential; a
-straight `COPY` command may not be enough.
-
-`pgloader` also allows loading from fixed-width files,
-which `COPY` does not.
-
-If you need to reload the table completely from scratch, then specify
-the `WITH TRUNCATE` clause in the `pgloader` script.
-
-There are also options to specify SQL to be executed before and after
-loading data. For instance, you can have a script that creates the empty
-tables before, you can add constraints after, or both.
-
-
-
-There\'s more...
-----------------
-
-After loading, if we have load errors, then there will be bloat in the
-PostgreSQL tables. You should think about whether
-you need to add a `VACUUM` command after the data load, though
-this will possibly make the load take much longer.
-
-We need to be careful to avoid loading data twice.
-The only easy way of doing so is to make sure that there is at least one
-unique index defined on every table that you load. The load should then
-fail very quickly.
-
-String handling can often be difficult because of the presence of
-formatting or non-printable characters. The default setting for
-PostgreSQL is to have a parameter named
-`standard_conforming_strings` set to `off`, which
-means that backslashes will be assumed to be escape characters. Put
-another way, by default, the `\n` string means a line feed,
-which can cause data to appear truncated. You\'ll need to turn
-`standard_conforming_strings` to `on`, or you\'ll
-need to specify an escape character in the load-parameter file.
-
-If you are reloading data that has been unloaded
-from PostgreSQL, then you may want to use
-the `pg_restore` utility instead.
-The `pg_restore` utility has an option to reload data in
-parallel, `-j number_of_threads`, though this is only possible
-if the dump was produced using the custom `pg_dump` format.
-
-If you need to use rows from a read-only text file that does not have
-errors, then you may consider using
-the `file_fdw` contrib module. The short story is that it lets
-you create a *virtual* table that will parse the text file every time it
-is scanned. This is different from filling a table once and for all,
-either with `COPY` or `pgloader`; therefore, it
-covers a different use case. For example, think about an external data
-source that is maintained by a third party and needs to be shared across
-different databases.
-
-Another option would be EDB\*Loader, which also
-contains a wide range of load options:
-<https://www.enterprisedb.com/docs/epas/latest/epas_compat_tools_guide/02_edb_loader/>.
-
-
-
-
-
-
-
 
 
 Making bulk data changes using server-side procedures with transactions
@@ -1693,13 +1357,14 @@ Create an example table and fill it with nearly 1,000 rows of test data:
 
 ```
 CREATE TABLE employee (
- empid     BIGINT NOT NULL PRIMARY KEY
-,job_code  TEXT NOT NULL
-,salary    NUMERIC NOT NULL
+empid BIGINT NOT NULL PRIMARY KEY
+,job_code TEXT NOT NULL
+,salary NUMERIC NOT NULL
 );
+
 INSERT INTO employee VALUES (1, 'A1', 50000.00);
 INSERT INTO employee VALUES (2, 'B1', 40000.00);
-INSERT INTO employee SELECT generate_series(10,1000), 'A2', 10000.00);
+INSERT INTO employee VALUES (generate_series(10,1000), 'A2', 10000.00);
 ```
 
 
@@ -1786,12 +1451,12 @@ CREATE OR REPLACE FUNCTION job_start_new ()
  LANGUAGE plpgsql
  AS $$
  DECLARE
-  p_id BIGINT;
+  p_id BIGINT;
 BEGIN
-  INSERT INTO job_status (status, restartdata)
-     VALUES ('START', 0)
-   RETURNING id INTO p_id;
-  RETURN p_id;  
+  INSERT INTO job_status (status, restartdata)
+     VALUES ('START', 0)
+   RETURNING id INTO p_id;
+  RETURN p_id;  
  END; $$;
 CREATE OR REPLACE FUNCTION job_get_status (jobid bigint)
 RETURNS bigint
@@ -1800,30 +1465,30 @@ AS $$
 DECLARE
  rdata BIGINT;
 BEGIN
-  SELECT restartdata INTO rdata
-    FROM job_status
-    WHERE status != 'COMPLETE' AND id = jobid;
-  IF NOT FOUND THEN
-    RAISE EXCEPTION 'job id does not exist';
-  END IF;
-  RETURN rdata;
+  SELECT restartdata INTO rdata
+    FROM job_status
+    WHERE status != 'COMPLETE' AND id = jobid;
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'job id does not exist';
+  END IF;
+  RETURN rdata;
 END; $$;
 CREATE OR REPLACE PROCEDURE
 job_update (jobid bigint, rdata bigint)
 LANGUAGE plpgsql
 AS $$
 BEGIN
-  UPDATE job_status
-    SET status = 'IN PROGRESS'
-       ,restartdata = rdata
-    WHERE id = jobid;
+  UPDATE job_status
+    SET status = 'IN PROGRESS'
+       ,restartdata = rdata
+    WHERE id = jobid;
 END; $$;
 CREATE OR REPLACE PROCEDURE job_complete (jobid bigint)
 LANGUAGE plpgsql
 AS $$
 BEGIN
-  UPDATE job_status SET status = 'COMPLETE'
-    WHERE id = jobid;
+  UPDATE job_status SET status = 'COMPLETE'
+    WHERE id = jobid;
 END; $$;
 ```
 

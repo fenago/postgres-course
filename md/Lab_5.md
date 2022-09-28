@@ -2005,18 +2005,6 @@ Changing the definition of an enum data type
 ============================================
 
 
-PostgreSQL comes with several data types, but users can create custom
-types to faithfully represent any value. Data type
-management is mostly, but not exclusively, a developer\'s job, and data
-type design goes beyond the scope of this book. This is a quick topic
-that only covers the simpler problem of the need to apply a specific
-change to an existing data type.
-
-
-
-Getting ready
--------------
-
 Enumerative data types are defined like this:
 
 
